@@ -150,7 +150,7 @@ Function Start-Failback {
   foreach ($SubscriptionID in $Script:ListOfSubscriptionIDs) {
     Set-AzContext -SubscriptionId $SubscriptionID
     $TagValue = $env:FWUDRTAG
-    $Res = Find-AzResource -TagName nva_ha_udr -TagValue $TagValue
+    $Res = Get-AzResource -TagName nva_ha_udr -TagValue $TagValue
 
     foreach ($RTable in $Res) {
       $Table = Get-AzRouteTable -ResourceGroupName $RTable.ResourceGroupName -Name $RTable.Name
