@@ -55,6 +55,8 @@
 
 param($myTimer, $TriggerMetadata)
 
+Import-Module Az
+
 Write-Output -InputObject "HA NVA timer trigger function executed at: $(Get-Date)"
 
 #--------------------------------------------------------------------------  
