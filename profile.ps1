@@ -20,3 +20,8 @@ if ($env:MSI_SECRET) {
 # Enable-AzureRmAlias
 
 # You can also define functions or aliases that can be referenced in any of your PowerShell functions.
+
+Import-Module Az.Accounts
+Import-Module Az.Compute
+Import-Module Az.Network
+Import-Module Az.Resources
