@@ -25,39 +25,68 @@
 #     Example:  "0 */5 * * * *"  to run on multiples of 5 minutes on the 0-second mark
 #
 #-------------------------------------------------------------------------
+#-------------------------------------------------------------------------
+#
+# High Availability (HA) Network Virtual Appliance (NVA) Failover Function
+#
+# This script provides a sample for monitoring HA NVA firewall status and performing
+# failover and/or failback if needed. It has been updated to run in PowerShell 7.4 and
+# use Az modules on Azure Functions v4.
+#
+# To configure this function app, the following items must be setup:
+#
+#   - Provision the pre-requisite Azure Resource Groups, Virtual Networks and Subnets, Network Virtual Appliances
+#
+#   - Create an Azure timer function app running PowerShell 7.4 (Functions v4)
+#
+#   - Set the Azure function app settings with credentials:
+#     SP_PASSWORD, SP_USERNAME, TENANTID, SUBSCRIPTIONID, AZURECLOUD must be added
+#     AZURECLOUD = "AzureCloud" or "AzureUSGovernment"
+#
+#   - Set Firewall VM names and Resource Group in the Azure function app settings:
+#     FW1NAME, FW2NAME, FWMONITOR, FW1FQDN, FW1PORT, FW2FQDN, FW2PORT, FWRGNAME, FWTRIES, FWDELAY, FWUDRTAG must be added
+#     FWMONITOR = "VMStatus" or "TCPPort" - If using "TCPPort", then also set FW1FQDN, FW2FQDN, FW1PORT and FW2PORT values
+#
+#   - Set Timer Schedule where positions represent: Seconds - Minutes - Hours - Day - Month - DayofWeek
+#     Example:  "*/30 * * * * *" to run on multiples of 30 seconds
+#     Example:  "0 */5 * * * *"  to run on multiples of 5 minutes on the 0-second mark
+#
+#-------------------------------------------------------------------------
 
-Write-Output -InputObject "HA NVA timer trigger function executed at:$(Get-Date)"
+param($myTimer, $TriggerMetadata)
 
+Write-Output -InputObject "HA NVA timer trigger function executed at: $(Get-Date)"
+
+#--------------------------------------------------------------------------  
+# Set firewall monitoring variables here  
 #--------------------------------------------------------------------------
-# Set firewall monitoring variables here
+
+$VMFW1Name = $env:FW1NAME      # Set the Name of the primary NVA firewall  
+$VMFW2Name = $env:FW2NAME      # Set the Name of the secondary NVA firewall  
+$FW1RGName = $env:FWRGNAME     # Set the ResourceGroup that contains FW1  
+$FW2RGName = $env:FWRGNAME     # Set the ResourceGroup that contains FW2  
+$Monitor = $env:FWMONITOR      # "VMStatus" or "TCPPort" are valid values  
+
+#--------------------------------------------------------------------------  
+# The parameters below are required if using "TCPPort" mode for monitoring  
 #--------------------------------------------------------------------------
 
-$VMFW1Name = $env:FW1NAME      # Set the Name of the primary NVA firewall
-$VMFW2Name = $env:FW2NAME      # Set the Name of the secondary NVA firewall
-$FW1RGName = $env:FWRGNAME     # Set the ResourceGroup that contains FW1
-$FW2RGName = $env:FWRGNAME     # Set the ResourceGroup that contains FW2
-$Monitor = $env:FWMONITOR      # "VMStatus" or "TCPPort" are valid values
+$TCPFW1Server = $env:FW1FQDN   # Hostname of the site to be monitored via the primary NVA firewall if using "TCPPort"  
+$TCPFW1Port = $env:FW1PORT     # TCP Port of the site to be monitored via the primary NVA firewall if using "TCPPort"  
+$TCPFW2Server = $env:FW2FQDN   # Hostname of the site to be monitored via the secondary NVA firewall if using "TCPPort"  
+$TCPFW2Port = $env:FW2PORT     # TCP Port of the site to be monitored via the secondary NVA firewall if using "TCPPort"  
 
-#--------------------------------------------------------------------------
-# The parameters below are required if using "TCPPort" mode for monitoring
-#--------------------------------------------------------------------------
-
-$TCPFW1Server = $env:FW1FQDN   # Hostname of the site to be monitored via the primary NVA firewall if using "TCPPort"
-$TCPFW1Port = $env:FW1PORT     # TCP Port of the site to be monitored via the primary NVA firewall if using "TCPPort"
-$TCPFW2Server = $env:FW2FQDN   # Hostname of the site to be monitored via the secondary NVA firewall if using "TCPPort"
-$TCPFW2Port = $env:FW2PORT     # TCP Port of the site to be monitored via the secondary NVA firewall if using "TCPPort"
-
-#--------------------------------------------------------------------------
-# Set the failover and failback behavior for the firewalls
+#--------------------------------------------------------------------------  
+# Set the failover and failback behavior for the firewalls  
 #--------------------------------------------------------------------------
 
-$FailOver = $True              # Enable fail-over to secondary NVA if primary drops
-$FailBack = $True              # Enable fail-back to primary if secondary drops
-$IntTries = $env:FWTRIES       # Number of firewall tests to try 
-$IntSleep = $env:FWDELAY       # Delay in seconds between tries
+$FailOver = $True              # Enable fail-over to secondary NVA if primary drops  
+$FailBack = $True              # Enable fail-back to primary if secondary drops  
+$IntTries = $env:FWTRIES       # Number of firewall tests to try   
+$IntSleep = $env:FWDELAY       # Delay in seconds between tries  
 
-#--------------------------------------------------------------------------
-# Code blocks for supporting functions
+#--------------------------------------------------------------------------  
+# Code blocks for supporting functions  
 #--------------------------------------------------------------------------
 
 Function Send-AlertMessage ($Message)
@@ -112,11 +141,11 @@ Function Start-Failover
         {
           if($RouteName.NextHopIpAddress -eq $SecondaryInts[$i])
           {
-            Write-Output -InputObject 'Secondary NVA is already ACTIVE' 
+            Write-Output -InputObject 'Secondary NVA is already ACTIVE'
           }
           elseif($RouteName.NextHopIpAddress -eq $PrimaryInts[$i])
           {
-            Set-AzRouteConfig -Name $RouteName.Name  -NextHopType VirtualAppliance -RouteTable $Table -AddressPrefix $RouteName.AddressPrefix -NextHopIpAddress $SecondaryInts[$i] 
+            Set-AzRouteConfig -Name $RouteName.Name  -NextHopType VirtualAppliance -RouteTable $Table -AddressPrefix $RouteName.AddressPrefix -NextHopIpAddress $SecondaryInts[$i]
           }
         }
       }
@@ -148,7 +177,7 @@ Function Start-Failback
         {
           if($RouteName.NextHopIpAddress -eq $PrimaryInts[$i])
           {
-            Write-Output -InputObject 'Primary NVA is already ACTIVE' 
+            Write-Output -InputObject 'Primary NVA is already ACTIVE'
           }
           elseif($RouteName.NextHopIpAddress -eq $SecondaryInts[$i])
           {
@@ -171,10 +200,10 @@ Function Get-FWInterfaces
 
   foreach($Nic in $Nics)
   {
-    if (($Nic.VirtualMachine.Id -eq $VMS1.Id) -or ($Nic.VirtualMachine.Id -eq $VMS2.Id)) 
+    if (($Nic.VirtualMachine.Id -eq $VMS1.Id) -or ($Nic.VirtualMachine.Id -eq $VMS2.Id))
     {
       $VM = $VMS | Where-Object { $_.Id -eq $Nic.VirtualMachine.Id }
-      $Prv = $Nic.IpConfigurations | Select-Object -ExpandProperty PrivateIpAddress  
+      $Prv = $Nic.IpConfigurations | Select-Object -ExpandProperty PrivateIpAddress
 
       if ($VM.Name -eq $VMFW1Name)
       {
@@ -195,7 +224,7 @@ Function Get-Subscriptions
   Write-Output -InputObject $Script:ListOfSubscriptionIDs
 }
 
-#--------------------------------------------------------------------------
+#--------------------------------------------------------------------------  
 # Main code block for Azure function app                       
 #--------------------------------------------------------------------------
 
